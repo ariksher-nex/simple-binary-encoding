@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,12 @@
  */
 package uk.co.real_logic.sbe.generation.java;
 
+import org.agrona.Strings;
 import uk.co.real_logic.sbe.PrimitiveType;
 import uk.co.real_logic.sbe.SbeTool;
 import uk.co.real_logic.sbe.generation.Generators;
 import uk.co.real_logic.sbe.ir.Token;
-import uk.co.real_logic.sbe.util.ValidationUtil;
+import uk.co.real_logic.sbe.ValidationUtil;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -32,11 +33,14 @@ import java.util.Map;
 import static java.lang.reflect.Modifier.STATIC;
 
 /**
- * Utilities for mapping between IR and the Java language.
+ * Utilities for mapping between {@link uk.co.real_logic.sbe.ir.Ir} and the Java language.
  */
 public class JavaUtil
 {
-    public enum Separators
+    /**
+     * Separator symbols for {@link Object#toString()} implementations on codecs.
+     */
+    public enum Separator
     {
         BEGIN_GROUP('['),
         END_GROUP(']'),
@@ -52,13 +56,13 @@ public class JavaUtil
 
         public final char symbol;
 
-        Separators(final char symbol)
+        Separator(final char symbol)
         {
             this.symbol = symbol;
         }
 
         /**
-         * Add separator to a generated StringBuilder
+         * Add separator to a generated append to a {@link StringBuilder}.
          *
          * @param builder     the code generation builder to which information should be added
          * @param indent      the current generated code indentation
@@ -66,7 +70,7 @@ public class JavaUtil
          */
         public void appendToGeneratedBuilder(final StringBuilder builder, final String indent, final String builderName)
         {
-            append(builder, indent, builderName + ".append('" + symbol + "');");
+            builder.append(indent).append(builderName).append(".append('").append(symbol).append("');").append('\n');
         }
 
         public String toString()
@@ -159,14 +163,25 @@ public class JavaUtil
     }
 
     /**
+     * Format a Getter name for generated code.
+     *
+     * @param propertyName to be formatted.
+     * @return the property name formatted as a getter name.
+     */
+    public static String formatGetterName(final String propertyName)
+    {
+        return "get" + Generators.toUpperFirstChar(propertyName);
+    }
+
+    /**
      * Format a class name for the generated code.
      *
-     * @param value to be formatted.
-     * @return the string formatted as a class name.
+     * @param className to be formatted.
+     * @return the formatted class name.
      */
-    public static String formatClassName(final String value)
+    public static String formatClassName(final String className)
     {
-        return Generators.toUpperFirstChar(value);
+        return Generators.toUpperFirstChar(className);
     }
 
     /**
@@ -261,12 +276,13 @@ public class JavaUtil
         final StringBuilder sb, final String indent, final Token typeToken)
     {
         final String description = typeToken.description();
-        if (null == description || description.isEmpty())
+        if (Strings.isEmpty(description))
         {
             return;
         }
 
-        sb.append(indent).append("/**\n")
+        sb.append('\n')
+            .append(indent).append("/**\n")
             .append(indent).append(" * ").append(description).append('\n')
             .append(indent).append(" */\n");
     }
@@ -284,7 +300,7 @@ public class JavaUtil
         throws IOException
     {
         final String description = optionToken.description();
-        if (null == description || description.isEmpty())
+        if (Strings.isEmpty(description))
         {
             return;
         }
@@ -292,7 +308,7 @@ public class JavaUtil
         out.append(indent).append("/**\n")
             .append(indent).append(" * ").append(description).append('\n')
             .append(indent).append(" *\n")
-            .append(indent).append(" * @return true if ").append(optionToken.name()).append(" is set or false if not\n")
+            .append(indent).append(" * @return true if ").append(optionToken.name()).append(" set or false if not.\n")
             .append(indent).append(" */\n");
     }
 
@@ -309,7 +325,7 @@ public class JavaUtil
         throws IOException
     {
         final String description = optionToken.description();
-        if (null == description || description.isEmpty())
+        if (Strings.isEmpty(description))
         {
             return;
         }
@@ -334,16 +350,17 @@ public class JavaUtil
         final StringBuilder sb, final String indent, final Token propertyToken, final String typeName)
     {
         final String description = propertyToken.description();
-        if (null == description || description.isEmpty())
+        if (Strings.isEmpty(description))
         {
             return;
         }
 
-        sb.append(indent).append("/**\n")
+        sb.append('\n')
+            .append(indent).append("/**\n")
             .append(indent).append(" * ").append(description).append('\n')
             .append(indent).append(" *\n")
             .append(indent).append(" * @return ").append(typeName).append(" : ").append(description).append("\n")
-            .append(indent).append(" */\n");
+            .append(indent).append(" */");
     }
 
     /**
@@ -358,16 +375,17 @@ public class JavaUtil
         final StringBuilder sb, final String indent, final Token propertyToken, final String typeName)
     {
         final String description = propertyToken.description();
-        if (null == description || description.isEmpty())
+        if (Strings.isEmpty(description))
         {
             return;
         }
 
-        sb.append(indent).append("/**\n")
+        sb.append('\n')
+            .append(indent).append("/**\n")
             .append(indent).append(" * ").append(description).append("\n")
             .append(indent).append(" *\n")
-            .append(indent).append(" * @param count of times the group will be encoded\n")
-            .append(indent).append(" * @return ").append(typeName).append(" : encoder for the group\n")
-            .append(indent).append(" */\n");
+            .append(indent).append(" * @param count of times the group will be encoded.\n")
+            .append(indent).append(" * @return ").append(typeName).append(" : encoder for the group.\n")
+            .append(indent).append(" */");
     }
 }

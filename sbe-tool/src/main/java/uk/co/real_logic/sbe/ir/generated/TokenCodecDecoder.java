@@ -1,8 +1,9 @@
-/* Generated SBE (Simple Binary Encoding) message codec */
+/* Generated SBE (Simple Binary Encoding) message codec. */
 package uk.co.real_logic.sbe.ir.generated;
 
 import org.agrona.MutableDirectBuffer;
 import org.agrona.DirectBuffer;
+
 
 /**
  * Codec for an IR Token
@@ -18,10 +19,11 @@ public class TokenCodecDecoder
 
     private final TokenCodecDecoder parentMessage = this;
     private DirectBuffer buffer;
-    protected int offset;
-    protected int limit;
-    protected int actingBlockLength;
-    protected int actingVersion;
+    private int initialOffset;
+    private int offset;
+    private int limit;
+    int actingBlockLength;
+    int actingVersion;
 
     public int sbeBlockLength()
     {
@@ -53,6 +55,11 @@ public class TokenCodecDecoder
         return buffer;
     }
 
+    public int initialOffset()
+    {
+        return initialOffset;
+    }
+
     public int offset()
     {
         return offset;
@@ -68,6 +75,7 @@ public class TokenCodecDecoder
         {
             this.buffer = buffer;
         }
+        this.initialOffset = offset;
         this.offset = offset;
         this.actingBlockLength = actingBlockLength;
         this.actingVersion = actingVersion;
@@ -113,12 +121,9 @@ public class TokenCodecDecoder
 
     public static String tokenOffsetMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -167,12 +172,9 @@ public class TokenCodecDecoder
 
     public static String tokenSizeMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -221,12 +223,9 @@ public class TokenCodecDecoder
 
     public static String fieldIdMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -275,12 +274,9 @@ public class TokenCodecDecoder
 
     public static String tokenVersionMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -329,12 +325,9 @@ public class TokenCodecDecoder
 
     public static String componentTokenCountMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -383,12 +376,9 @@ public class TokenCodecDecoder
 
     public static String signalMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -422,12 +412,9 @@ public class TokenCodecDecoder
 
     public static String primitiveTypeMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -461,12 +448,9 @@ public class TokenCodecDecoder
 
     public static String byteOrderMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -500,12 +484,9 @@ public class TokenCodecDecoder
 
     public static String presenceMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -539,12 +520,9 @@ public class TokenCodecDecoder
 
     public static String deprecatedMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "";
-            case TIME_UNIT: return "";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "optional";
+            return "optional";
         }
 
         return "";
@@ -588,12 +566,9 @@ public class TokenCodecDecoder
 
     public static String nameMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -607,14 +582,25 @@ public class TokenCodecDecoder
     public int nameLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipName()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getName(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -626,7 +612,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -638,7 +624,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -647,7 +633,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -688,12 +674,9 @@ public class TokenCodecDecoder
 
     public static String constValueMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -707,14 +690,25 @@ public class TokenCodecDecoder
     public int constValueLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipConstValue()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getConstValue(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -726,7 +720,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -738,7 +732,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -747,7 +741,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -788,12 +782,9 @@ public class TokenCodecDecoder
 
     public static String minValueMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -807,14 +798,25 @@ public class TokenCodecDecoder
     public int minValueLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipMinValue()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getMinValue(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -826,7 +828,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -838,7 +840,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -847,7 +849,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -888,12 +890,9 @@ public class TokenCodecDecoder
 
     public static String maxValueMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -907,14 +906,25 @@ public class TokenCodecDecoder
     public int maxValueLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipMaxValue()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getMaxValue(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -926,7 +936,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -938,7 +948,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -947,7 +957,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -988,12 +998,9 @@ public class TokenCodecDecoder
 
     public static String nullValueMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1007,14 +1014,25 @@ public class TokenCodecDecoder
     public int nullValueLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipNullValue()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getNullValue(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1026,7 +1044,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1038,7 +1056,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1047,7 +1065,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1088,12 +1106,9 @@ public class TokenCodecDecoder
 
     public static String characterEncodingMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1107,14 +1122,25 @@ public class TokenCodecDecoder
     public int characterEncodingLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipCharacterEncoding()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getCharacterEncoding(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1126,7 +1152,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1138,7 +1164,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1147,7 +1173,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1188,12 +1214,9 @@ public class TokenCodecDecoder
 
     public static String epochMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1207,14 +1230,25 @@ public class TokenCodecDecoder
     public int epochLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipEpoch()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getEpoch(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1226,7 +1260,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1238,7 +1272,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1247,7 +1281,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1288,12 +1322,9 @@ public class TokenCodecDecoder
 
     public static String timeUnitMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1307,14 +1338,25 @@ public class TokenCodecDecoder
     public int timeUnitLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipTimeUnit()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getTimeUnit(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1326,7 +1368,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1338,7 +1380,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1347,7 +1389,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1388,12 +1430,9 @@ public class TokenCodecDecoder
 
     public static String semanticTypeMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1407,14 +1446,25 @@ public class TokenCodecDecoder
     public int semanticTypeLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipSemanticType()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getSemanticType(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1426,7 +1476,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1438,7 +1488,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1447,7 +1497,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1488,12 +1538,9 @@ public class TokenCodecDecoder
 
     public static String descriptionMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1507,14 +1554,25 @@ public class TokenCodecDecoder
     public int descriptionLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipDescription()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getDescription(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1526,7 +1584,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1538,7 +1596,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1547,7 +1605,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1588,12 +1646,9 @@ public class TokenCodecDecoder
 
     public static String referencedNameMetaAttribute(final MetaAttribute metaAttribute)
     {
-        switch (metaAttribute)
+        if (MetaAttribute.PRESENCE == metaAttribute)
         {
-            case EPOCH: return "unix";
-            case TIME_UNIT: return "nanosecond";
-            case SEMANTIC_TYPE: return "";
-            case PRESENCE: return "required";
+            return "required";
         }
 
         return "";
@@ -1607,14 +1662,25 @@ public class TokenCodecDecoder
     public int referencedNameLength()
     {
         final int limit = parentMessage.limit();
-        return (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        return (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+    }
+
+    public int skipReferencedName()
+    {
+        final int headerLength = 2;
+        final int limit = parentMessage.limit();
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataOffset = limit + headerLength;
+        parentMessage.limit(dataOffset + dataLength);
+
+        return dataLength;
     }
 
     public int getReferencedName(final MutableDirectBuffer dst, final int dstOffset, final int length)
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1626,7 +1692,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         final int bytesCopied = Math.min(length, dataLength);
         parentMessage.limit(limit + headerLength + dataLength);
         buffer.getBytes(limit + headerLength, dst, dstOffset, bytesCopied);
@@ -1638,7 +1704,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
         wrapBuffer.wrap(buffer, limit + headerLength, dataLength);
     }
@@ -1647,7 +1713,7 @@ public class TokenCodecDecoder
     {
         final int headerLength = 2;
         final int limit = parentMessage.limit();
-        final int dataLength = (int)(buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
+        final int dataLength = (buffer.getShort(limit, java.nio.ByteOrder.LITTLE_ENDIAN) & 0xFFFF);
         parentMessage.limit(limit + headerLength + dataLength);
 
         if (0 == dataLength)
@@ -1671,16 +1737,28 @@ public class TokenCodecDecoder
         return value;
     }
 
-
     public String toString()
     {
-        return appendTo(new StringBuilder(100)).toString();
+        if (null == buffer)
+        {
+            return "";
+        }
+
+        final TokenCodecDecoder decoder = new TokenCodecDecoder();
+        decoder.wrap(buffer, initialOffset, actingBlockLength, actingVersion);
+
+        return decoder.appendTo(new StringBuilder()).toString();
     }
 
     public StringBuilder appendTo(final StringBuilder builder)
     {
+        if (null == buffer)
+        {
+            return builder;
+        }
+
         final int originalLimit = limit();
-        limit(offset + actingBlockLength);
+        limit(initialOffset + actingBlockLength);
         builder.append("[TokenCodec](sbeTemplateId=");
         builder.append(TEMPLATE_ID);
         builder.append("|sbeSchemaId=");
@@ -1731,37 +1809,37 @@ public class TokenCodecDecoder
         builder.append(deprecated());
         builder.append('|');
         builder.append("name=");
-        builder.append('\'' + name() + '\'');
+        builder.append('\'').append(name()).append('\'');
         builder.append('|');
         builder.append("constValue=");
-        builder.append('\'' + constValue() + '\'');
+        builder.append('\'').append(constValue()).append('\'');
         builder.append('|');
         builder.append("minValue=");
-        builder.append('\'' + minValue() + '\'');
+        builder.append('\'').append(minValue()).append('\'');
         builder.append('|');
         builder.append("maxValue=");
-        builder.append('\'' + maxValue() + '\'');
+        builder.append('\'').append(maxValue()).append('\'');
         builder.append('|');
         builder.append("nullValue=");
-        builder.append('\'' + nullValue() + '\'');
+        builder.append('\'').append(nullValue()).append('\'');
         builder.append('|');
         builder.append("characterEncoding=");
-        builder.append('\'' + characterEncoding() + '\'');
+        builder.append('\'').append(characterEncoding()).append('\'');
         builder.append('|');
         builder.append("epoch=");
-        builder.append('\'' + epoch() + '\'');
+        builder.append('\'').append(epoch()).append('\'');
         builder.append('|');
         builder.append("timeUnit=");
-        builder.append('\'' + timeUnit() + '\'');
+        builder.append('\'').append(timeUnit()).append('\'');
         builder.append('|');
         builder.append("semanticType=");
-        builder.append('\'' + semanticType() + '\'');
+        builder.append('\'').append(semanticType()).append('\'');
         builder.append('|');
         builder.append("description=");
-        builder.append('\'' + description() + '\'');
+        builder.append('\'').append(description()).append('\'');
         builder.append('|');
         builder.append("referencedName=");
-        builder.append('\'' + referencedName() + '\'');
+        builder.append('\'').append(referencedName()).append('\'');
 
         limit(originalLimit);
 

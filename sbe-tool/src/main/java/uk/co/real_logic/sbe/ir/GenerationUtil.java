@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,5 +106,18 @@ public final class GenerationUtil
         }
 
         return groupNames;
+    }
+
+    public static int findSignal(final List<Token> tokens, final Signal signal)
+    {
+        for (int i = 0, endIndex = tokens.size() - 1; i < endIndex; i++)
+        {
+            if (signal == tokens.get(i).signal())
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 }

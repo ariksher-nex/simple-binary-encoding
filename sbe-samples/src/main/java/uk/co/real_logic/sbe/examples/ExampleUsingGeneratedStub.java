@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@ import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.READ;
 import static java.nio.file.StandardOpenOption.WRITE;
 
+/**
+ * Example encode and decode of a complex message using generated stub codecs.
+ */
 public class ExampleUsingGeneratedStub
 {
     private static final String ENCODING_FILENAME = "sbe.encoding.filename";

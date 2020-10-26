@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,11 +74,6 @@ public class Token
      * Length not determined
      */
     public static final int VARIABLE_LENGTH = -1;
-
-    /**
-     * Offset not computed or set
-     */
-    public static final int UNKNOWN_OFFSET = -1;
 
     private final Signal signal;
     private final String name;
@@ -281,7 +276,7 @@ public class Token
      * The offset for this token in the message.
      *
      * @return the offset of this Token. A value of 0 means the node has no relevant offset. A value of
-     * {@link Token#UNKNOWN_OFFSET} means this nodes true offset is dependent on variable length
+     * {@link Token#VARIABLE_LENGTH} means this nodes true offset is dependent on variable length
      * fields ahead of it in the encoding.
      */
     public int offset()
@@ -319,11 +314,21 @@ public class Token
         return encoding;
     }
 
+    /**
+     * Is the encoding presence is a constant or not?
+     *
+     * @return true if the encoding presence is a constant or false if not.
+     */
     public boolean isConstantEncoding()
     {
         return encoding.presence() == CONSTANT;
     }
 
+    /**
+     * Is the encoding presence is optional or not?
+     *
+     * @return true if the encoding presence is optional or false if not.
+     */
     public boolean isOptionalEncoding()
     {
         return encoding.presence() == OPTIONAL;
@@ -346,6 +351,9 @@ public class Token
             '}';
     }
 
+    /**
+     * Builder for {@link Token} which can simplify construction.
+     */
     public static class Builder
     {
         private Signal signal;

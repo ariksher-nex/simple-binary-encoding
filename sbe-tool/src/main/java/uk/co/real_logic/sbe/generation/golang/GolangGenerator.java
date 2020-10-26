@@ -33,11 +33,15 @@ import java.util.Scanner;
 import java.util.TreeSet;
 
 import static uk.co.real_logic.sbe.PrimitiveType.CHAR;
+import static uk.co.real_logic.sbe.generation.Generators.toUpperFirstChar;
 import static uk.co.real_logic.sbe.generation.golang.GolangUtil.*;
 import static uk.co.real_logic.sbe.ir.GenerationUtil.collectVarData;
 import static uk.co.real_logic.sbe.ir.GenerationUtil.collectGroups;
 import static uk.co.real_logic.sbe.ir.GenerationUtil.collectFields;
 
+/**
+ * Codec generator for the Go Lang programming language.
+ */
 @SuppressWarnings("MethodLength")
 public class GolangGenerator implements CodeGenerator
 {
@@ -79,9 +83,6 @@ public class GolangGenerator implements CodeGenerator
 
                 case BEGIN_COMPOSITE:
                     generateComposite(tokens, "");
-                    break;
-
-                case BEGIN_MESSAGE:
                     break;
 
                 default:
@@ -494,10 +495,23 @@ public class GolangGenerator implements CodeGenerator
         final Encoding encoding = token.encoding();
 
         // Optional items get initialized to their NullValue
-        sb.append(String.format(
-            "\t%1$s = %2$s\n",
-            varName,
-            generateNullValueLiteral(encoding.primitiveType(), encoding)));
+        if (token.arrayLength() > 1)
+        {
+            sb.append(String.format(
+                "\tfor idx := 0; idx < %1$d; idx++ {\n" +
+                "\t\t%2$s[idx] = %3$s\n" +
+                "\t}\n",
+                token.arrayLength(),
+                varName,
+                generateNullValueLiteral(encoding.primitiveType(), encoding)));
+        }
+        else
+        {
+            sb.append(String.format(
+                "\t%1$s = %2$s\n",
+                varName,
+                generateNullValueLiteral(encoding.primitiveType(), encoding)));
+        }
     }
 
     private void generateConstantInitPrimitive(
@@ -2099,24 +2113,10 @@ public class GolangGenerator implements CodeGenerator
                 generateSinceActingDeprecated(sb, containingTypeName, propertyName, signalToken);
                 generateFieldMetaAttributeMethod(sb, containingTypeName, propertyName, signalToken);
 
-                switch (encodingToken.signal())
+                if (encodingToken.signal() == Signal.ENCODING)
                 {
-                    case ENCODING:
-                        generateMinMaxNull(sb, containingTypeName, propertyName, encodingToken);
-                        generateCharacterEncoding(sb, containingTypeName, propertyName, encodingToken);
-                        break;
-
-                    case BEGIN_ENUM:
-                        break;
-
-                    case BEGIN_SET:
-                        break;
-
-                    case BEGIN_COMPOSITE:
-                        break;
-
-                    default:
-                        break;
+                    generateMinMaxNull(sb, containingTypeName, propertyName, encodingToken);
+                    generateCharacterEncoding(sb, containingTypeName, propertyName, encodingToken);
                 }
             }
         }

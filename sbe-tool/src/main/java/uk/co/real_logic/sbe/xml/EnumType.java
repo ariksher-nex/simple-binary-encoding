@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,11 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static uk.co.real_logic.sbe.xml.Presence.OPTIONAL;
-import static uk.co.real_logic.sbe.xml.XmlSchemaParser.handleError;
-import static uk.co.real_logic.sbe.xml.XmlSchemaParser.handleWarning;
-import static uk.co.real_logic.sbe.xml.XmlSchemaParser.checkForValidName;
-import static uk.co.real_logic.sbe.xml.XmlSchemaParser.getAttributeValue;
-import static uk.co.real_logic.sbe.xml.XmlSchemaParser.getAttributeValueOrNull;
+import static uk.co.real_logic.sbe.xml.XmlSchemaParser.*;
 
 /**
  * SBE enum type for representing an enumeration of values.
@@ -87,7 +83,7 @@ public class EnumType extends Type
             default:
                 // might not have ran into this type yet, so look for it
                 final Node encodingTypeNode = (Node)xPath.compile(
-                    String.format("%s[@name=\'%s\']", XmlSchemaParser.TYPE_XPATH_EXPR, encodingTypeStr))
+                    String.format("%s[@name='%s']", XmlSchemaParser.TYPE_XPATH_EXPR, encodingTypeStr))
                     .evaluate(node.getOwnerDocument(), XPathConstants.NODE);
 
                 if (null == encodingTypeNode)
@@ -147,6 +143,31 @@ public class EnumType extends Type
             if (validValueByNameMap.get(v.name()) != null)
             {
                 handleWarning(node, "validValue already exists for name: " + v.name());
+            }
+
+            if (PrimitiveType.CHAR != encodingType)
+            {
+                final long value = v.primitiveValue().longValue();
+                final long minValue = null != encodedDataType && null != encodedDataType.minValue() ?
+                    encodedDataType.minValue().longValue() : encodingType.minValue().longValue();
+                final long maxValue = null != encodedDataType && null != encodedDataType.maxValue() ?
+                    encodedDataType.maxValue().longValue() : encodingType.maxValue().longValue();
+                final long nullLongValue = null != nullValue ? nullValue.longValue() :
+                    encodingType.nullValue().longValue();
+
+                if (nullLongValue == value)
+                {
+                    handleError(
+                        node,
+                        "validValue " + v.name() + " uses nullValue: " +
+                        (null != nullValue ? nullValue : encodingType.nullValue()));
+                }
+                else if (value < minValue || value > maxValue)
+                {
+                    handleError(
+                        node,
+                        "validValue " + v.name() + " outside of range " + minValue + " - " + maxValue + ": " + value);
+                }
             }
 
             validValueByPrimitiveValueMap.put(v.primitiveValue(), v);
@@ -237,7 +258,7 @@ public class EnumType extends Type
     }
 
     /**
-     * Class to hold valid values for EnumType
+     * Holder for valid values for and {@link EnumType}.
      */
     public static class ValidValue
     {

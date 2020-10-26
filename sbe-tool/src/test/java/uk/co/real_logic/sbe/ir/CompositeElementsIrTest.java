@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package uk.co.real_logic.sbe.ir;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import uk.co.real_logic.sbe.PrimitiveType;
 import uk.co.real_logic.sbe.xml.IrGenerator;
 import uk.co.real_logic.sbe.xml.MessageSchema;
@@ -23,16 +23,15 @@ import uk.co.real_logic.sbe.xml.ParserOptions;
 
 import java.util.List;
 
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertThat;
-import static uk.co.real_logic.sbe.TestUtil.getLocalResource;
+import static uk.co.real_logic.sbe.Tests.getLocalResource;
 import static uk.co.real_logic.sbe.xml.XmlSchemaParser.parse;
 
 public class CompositeElementsIrTest
 {
     @Test
-    public void shouldGenerateCorrectIrForCompositeElementsSchema()
-        throws Exception
+    public void shouldGenerateIrForCompositeElementsSchema() throws Exception
     {
         final MessageSchema schema = parse(getLocalResource(
             "composite-elements-schema.xml"), ParserOptions.DEFAULT);
@@ -95,8 +94,7 @@ public class CompositeElementsIrTest
     }
 
     @Test
-    public void shouldGenerateCorrectIrForCompositeElementsWithOffsetsSchemaRc4()
-        throws Exception
+    public void shouldGenerateIrForCompositeElementsWithOffsetsSchemaRc4() throws Exception
     {
         final MessageSchema schema = parse(getLocalResource(
             "composite-elements-schema-rc4.xml"), ParserOptions.DEFAULT);
@@ -151,8 +149,7 @@ public class CompositeElementsIrTest
     }
 
     @Test
-    public void shouldGenerateCorrectIrForCompositeWithRefSchema()
-        throws Exception
+    public void shouldGenerateIrForCompositeWithRefSchema() throws Exception
     {
         final MessageSchema schema = parse(getLocalResource(
             "composite-elements-schema-rc4.xml"), ParserOptions.DEFAULT);

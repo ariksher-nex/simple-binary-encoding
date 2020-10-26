@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 package uk.co.real_logic.sbe.json;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import uk.co.real_logic.sbe.EncodedCarTestBase;
 import uk.co.real_logic.sbe.ir.Ir;
 import uk.co.real_logic.sbe.ir.IrDecoder;
@@ -32,7 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class JsonPrinterTest extends EncodedCarTestBase
 {
@@ -70,6 +70,8 @@ public class JsonPrinterTest extends EncodedCarTestBase
             "        \"manufacturerCode\": \"123\",\n" +
             "        \"fuel\": \"Petrol\"\n" +
             "    },\n" +
+            "    \"uuid\": [7, 3],\n" +
+            "    \"cupHolderCount\": 5,\n" +
             "    \"fuelFigures\": [\n" +
             "    {\n" +
             "        \"speed\": 30,\n" +

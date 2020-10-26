@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 package uk.co.real_logic.sbe.generation.cpp;
 
+import org.agrona.Strings;
 import org.agrona.Verify;
 import org.agrona.generation.OutputManager;
 import uk.co.real_logic.sbe.PrimitiveType;
@@ -32,9 +33,15 @@ import java.util.ArrayList;
 import java.util.Formatter;
 import java.util.List;
 
+import static uk.co.real_logic.sbe.generation.Generators.toLowerFirstChar;
+import static uk.co.real_logic.sbe.generation.Generators.toUpperFirstChar;
 import static uk.co.real_logic.sbe.generation.cpp.CppUtil.*;
 import static uk.co.real_logic.sbe.ir.GenerationUtil.*;
 
+/**
+ * Codec generator for the C++11 programming language with conditional compilation for additional C++14 and C++17
+ * features.
+ */
 @SuppressWarnings("MethodLength")
 public class CppGenerator implements CodeGenerator
 {
@@ -133,10 +140,11 @@ public class CppGenerator implements CodeGenerator
                 collectVarData(messageBody, i, varData);
 
                 final StringBuilder sb = new StringBuilder();
-                generateFields(sb, className, fields, BASE_INDENT, false);
+                generateFields(sb, className, fields, BASE_INDENT);
                 generateGroups(sb, groups, BASE_INDENT);
                 generateVarData(sb, className, varData, BASE_INDENT);
-                generateDisplay(sb, msgToken.name(), fields, groups, varData, BASE_INDENT + INDENT);
+                generateDisplay(sb, msgToken.name(), fields, groups, varData);
+                sb.append(generateMessageLength(groups, varData, BASE_INDENT));
                 sb.append("};\n");
                 sb.append(CppUtil.closingBraces(ir.namespaces().length)).append("#endif\n");
                 out.append(sb);
@@ -166,7 +174,7 @@ public class CppGenerator implements CodeGenerator
 
             final List<Token> fields = new ArrayList<>();
             i = collectFields(tokens, i, fields);
-            generateFields(sb, formatClassName(groupName), fields, indent + INDENT, false);
+            generateFields(sb, formatClassName(groupName), fields, indent + INDENT);
 
             final List<Token> groups = new ArrayList<>();
             i = collectGroups(tokens, i, groups);
@@ -177,6 +185,7 @@ public class CppGenerator implements CodeGenerator
             generateVarData(sb, formatClassName(groupName), varData, indent + INDENT);
 
             sb.append(generateGroupDisplay(groupName, fields, groups, varData, indent + INDENT + INDENT));
+            sb.append(generateMessageLength(groups, varData, indent + INDENT + INDENT));
 
             sb.append(indent).append("    };\n");
             generateGroupProperty(sb, groupName, groupToken, cppTypeForNumInGroup, indent);
@@ -191,8 +200,8 @@ public class CppGenerator implements CodeGenerator
         final int blockLength = tokens.get(index).encodedLength();
         final Token blockLengthToken = Generators.findFirst("blockLength", tokens, index);
         final Token numInGroupToken = Generators.findFirst("numInGroup", tokens, index);
-        final String cppTypeForBlockLength = cppTypeName(blockLengthToken.encoding().primitiveType());
-        final String cppTypeForNumInGroup = cppTypeName(numInGroupToken.encoding().primitiveType());
+        final String cppTypeBlockLength = cppTypeName(blockLengthToken.encoding().primitiveType());
+        final String cppTypeNumInGroup = cppTypeName(numInGroupToken.encoding().primitiveType());
 
         new Formatter(sb).format("\n" +
             indent + "class %1$s\n" +
@@ -200,6 +209,7 @@ public class CppGenerator implements CodeGenerator
             indent + "private:\n" +
             indent + "    char *m_buffer = nullptr;\n" +
             indent + "    std::uint64_t m_bufferLength = 0;\n" +
+            indent + "    std::uint64_t m_initialPosition = 0;\n" +
             indent + "    std::uint64_t *m_positionPtr = nullptr;\n" +
             indent + "    std::uint64_t m_blockLength = 0;\n" +
             indent + "    std::uint64_t m_count = 0;\n" +
@@ -227,8 +237,9 @@ public class CppGenerator implements CodeGenerator
             indent + "        m_bufferLength = bufferLength;\n" +
             indent + "        m_blockLength = dimensions.blockLength();\n" +
             indent + "        m_count = dimensions.numInGroup();\n" +
-            indent + "        m_index = std::numeric_limits<std::uint64_t>::max();\n" +
+            indent + "        m_index = 0;\n" +
             indent + "        m_actingVersion = actingVersion;\n" +
+            indent + "        m_initialPosition = *pos;\n" +
             indent + "        m_positionPtr = pos;\n" +
             indent + "        *m_positionPtr = *m_positionPtr + %1$d;\n" +
             indent + "    }\n",
@@ -259,16 +270,20 @@ public class CppGenerator implements CodeGenerator
             indent + "        m_buffer = buffer;\n" +
             indent + "        m_bufferLength = bufferLength;\n" +
             indent + "        %7$s dimensions(buffer, *pos, bufferLength, actingVersion);\n" +
-            indent + "        dimensions.blockLength((%1$s)%2$d);\n" +
-            indent + "        dimensions.numInGroup((%3$s)count);\n" +
-            indent + "        m_index = std::numeric_limits<std::uint64_t>::max();\n" +
+            indent + "        dimensions.blockLength(static_cast<%1$s>(%2$d));\n" +
+            indent + "        dimensions.numInGroup(static_cast<%3$s>(count));\n" +
+            indent + "        m_index = 0;\n" +
             indent + "        m_count = count;\n" +
             indent + "        m_blockLength = %2$d;\n" +
             indent + "        m_actingVersion = actingVersion;\n" +
+            indent + "        m_initialPosition = *pos;\n" +
             indent + "        m_positionPtr = pos;\n" +
             indent + "        *m_positionPtr = *m_positionPtr + %4$d;\n" +
             indent + "    }\n",
-            cppTypeForBlockLength, blockLength, cppTypeForNumInGroup, dimensionHeaderLength,
+            cppTypeBlockLength,
+            blockLength,
+            cppTypeNumInGroup,
+            dimensionHeaderLength,
             minCheck,
             numInGroupToken.encoding().applicableMaxValue().longValue(),
             dimensionsClassName);
@@ -284,11 +299,12 @@ public class CppGenerator implements CodeGenerator
             indent + "        return %2$d;\n" +
             indent + "    }\n\n" +
 
-            indent + "    SBE_NODISCARD std::uint64_t sbePosition() const\n" +
+            indent + "    SBE_NODISCARD std::uint64_t sbePosition() const SBE_NOEXCEPT\n" +
             indent + "    {\n" +
             indent + "        return *m_positionPtr;\n" +
             indent + "    }\n\n" +
 
+            indent + "    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)\n" +
             indent + "    std::uint64_t sbeCheckPosition(const std::uint64_t position)\n" +
             indent + "    {\n" +
             indent + "        if (SBE_BOUNDS_CHECK_EXPECT((position > m_bufferLength), false))\n" +
@@ -310,25 +326,42 @@ public class CppGenerator implements CodeGenerator
 
             indent + "    SBE_NODISCARD inline bool hasNext() const SBE_NOEXCEPT\n" +
             indent + "    {\n" +
-            indent + "        return m_index + 1 < m_count;\n" +
+            indent + "        return m_index < m_count;\n" +
             indent + "    }\n\n" +
 
             indent + "    inline %3$s &next()\n" +
             indent + "    {\n" +
+            indent + "        if (m_index >= m_count)\n" +
+            indent + "        {\n" +
+            indent + "            throw std::runtime_error(\"index >= count [E108]\");\n" +
+            indent + "        }\n" +
             indent + "        m_offset = *m_positionPtr;\n" +
             indent + "        if (SBE_BOUNDS_CHECK_EXPECT(((m_offset + m_blockLength) > m_bufferLength), false))\n" +
             indent + "        {\n" +
-            indent + "            throw std::runtime_error(\"" +
-            "buffer too short to support next group index [E108]\");\n" +
+            indent + "            throw std::runtime_error(\"buffer too short for next group index [E108]\");\n" +
             indent + "        }\n" +
             indent + "        *m_positionPtr = m_offset + m_blockLength;\n" +
             indent + "        ++m_index;\n\n" +
 
             indent + "        return *this;\n" +
             indent + "    }\n",
-            dimensionHeaderLength, blockLength, formatClassName(groupName));
+            dimensionHeaderLength,
+            blockLength,
+            formatClassName(groupName));
 
-        sb.append(indent).append("#if __cplusplus < 201103L\n")
+        sb.append("\n")
+            .append(indent).append("    inline std::uint64_t resetCountToIndex() SBE_NOEXCEPT\n")
+            .append(indent).append("    {\n")
+            .append(indent).append("        m_count = m_index;\n")
+            .append(indent).append("        ").append(dimensionsClassName)
+            .append(" dimensions(m_buffer, m_initialPosition, m_bufferLength, m_actingVersion);\n")
+            .append(indent)
+            .append("        dimensions.numInGroup(static_cast<").append(cppTypeNumInGroup).append(">(m_count));\n")
+            .append(indent).append("        return m_count;\n")
+            .append(indent).append("    }\n");
+
+        sb.append("\n")
+            .append(indent).append("#if __cplusplus < 201103L\n")
             .append(indent).append("    template<class Func> inline void forEach(Func& func)\n")
             .append(indent).append("    {\n")
             .append(indent).append("        while (hasNext())\n")
@@ -444,6 +477,24 @@ public class CppGenerator implements CodeGenerator
                 sb, token, propertyName, characterEncoding, lengthToken, lengthOfLengthField, lengthCppType, indent);
 
             new Formatter(sb).format("\n" +
+                indent + "    std::uint64_t skip%1$s()\n" +
+                indent + "    {\n" +
+                "%2$s" +
+                indent + "        std::uint64_t lengthOfLengthField = %3$d;\n" +
+                indent + "        std::uint64_t lengthPosition = sbePosition();\n" +
+                indent + "        %5$s lengthFieldValue;\n" +
+                indent + "        std::memcpy(&lengthFieldValue, m_buffer + lengthPosition, sizeof(%5$s));\n" +
+                indent + "        std::uint64_t dataLength = %4$s(lengthFieldValue);\n" +
+                indent + "        sbePosition(lengthPosition + lengthOfLengthField + dataLength);\n" +
+                indent + "        return dataLength;\n" +
+                indent + "    }\n",
+                propertyName,
+                generateArrayFieldNotPresentCondition(token.version(), indent),
+                lengthOfLengthField,
+                lengthByteOrderStr,
+                lengthCppType);
+
+            new Formatter(sb).format("\n" +
                 indent + "    SBE_NODISCARD const char *%1$s()\n" +
                 indent + "    {\n" +
                 "%2$s" +
@@ -489,9 +540,12 @@ public class CppGenerator implements CodeGenerator
                 indent + "        %3$s lengthFieldValue = %4$s(length);\n" +
                 indent + "        sbePosition(lengthPosition + lengthOfLengthField);\n" +
                 indent + "        std::memcpy(m_buffer + lengthPosition, &lengthFieldValue, sizeof(%3$s));\n" +
-                indent + "        std::uint64_t pos = sbePosition();\n" +
-                indent + "        sbePosition(pos + length);\n" +
-                indent + "        std::memcpy(m_buffer + pos, src, length);\n" +
+                indent + "        if (length != %3$s(0))\n" +
+                indent + "        {\n" +
+                indent + "            std::uint64_t pos = sbePosition();\n" +
+                indent + "            sbePosition(pos + length);\n" +
+                indent + "            std::memcpy(m_buffer + pos, src, length);\n" +
+                indent + "        }\n" +
                 indent + "        return *this;\n" +
                 indent + "    }\n",
                 propertyName,
@@ -549,25 +603,31 @@ public class CppGenerator implements CodeGenerator
             new Formatter(sb).format("\n" +
                 indent + "    %1$s &put%2$s(const std::string& str)\n" +
                 indent + "    {\n" +
-                indent + "        if (str.length() > %6$d)\n" +
+                indent + "        if (str.length() > %4$d)\n" +
                 indent + "        {\n" +
                 indent + "            throw std::runtime_error(\"std::string too long for length type [E109]\");\n" +
                 indent + "        }\n" +
-                indent + "        std::uint64_t lengthOfLengthField = %3$d;\n" +
-                indent + "        std::uint64_t lengthPosition = sbePosition();\n" +
-                indent + "        %4$s lengthFieldValue = %5$s(static_cast<%4$s>(str.length()));\n" +
-                indent + "        sbePosition(lengthPosition + lengthOfLengthField);\n" +
-                indent + "        std::memcpy(m_buffer + lengthPosition, &lengthFieldValue, sizeof(%4$s));\n" +
-                indent + "        std::uint64_t pos = sbePosition();\n" +
-                indent + "        sbePosition(pos + str.length());\n" +
-                indent + "        std::memcpy(m_buffer + pos, str.c_str(), str.length());\n" +
-                indent + "        return *this;\n" +
+                indent + "        return put%2$s(str.data(), static_cast<%3$s>(str.length()));\n" +
                 indent + "    }\n",
                 className,
                 propertyName,
-                lengthOfLengthField,
                 lengthCppType,
-                lengthByteOrderStr,
+                lengthToken.encoding().applicableMaxValue().longValue());
+
+            new Formatter(sb).format("\n" +
+                indent + "    #if __cplusplus >= 201703L\n" +
+                indent + "    %1$s &put%2$s(const std::string_view str)\n" +
+                indent + "    {\n" +
+                indent + "        if (str.length() > %4$d)\n" +
+                indent + "        {\n" +
+                indent + "            throw std::runtime_error(\"std::string too long for length type [E109]\");\n" +
+                indent + "        }\n" +
+                indent + "        return put%2$s(str.data(), static_cast<%3$s>(str.length()));\n" +
+                indent + "    }\n" +
+                indent + "    #endif\n",
+                className,
+                propertyName,
+                lengthCppType,
                 lengthToken.encoding().applicableMaxValue().longValue());
 
             i += token.componentTokenCount();
@@ -627,7 +687,7 @@ public class CppGenerator implements CodeGenerator
             sizeOfLengthField);
 
         new Formatter(sb).format("\n" +
-            indent + "    %4$s %1$sLength() const\n" +
+            indent + "    SBE_NODISCARD %4$s %1$sLength() const\n" +
             indent + "    {\n" +
             "%2$s" +
             indent + "        %4$s length;\n" +
@@ -730,16 +790,14 @@ public class CppGenerator implements CodeGenerator
                 compositeName, tokens.subList(1, tokens.size() - 1), BASE_INDENT));
 
             out.append(generateCompositeDisplay(
-                tokens.get(0).applicableTypeName(),
-                tokens.subList(1, tokens.size() - 1),
-                BASE_INDENT + INDENT));
+                tokens.get(0).applicableTypeName(), tokens.subList(1, tokens.size() - 1)));
 
             out.append("};\n\n");
             out.append(CppUtil.closingBraces(ir.namespaces().length)).append("\n#endif\n");
         }
     }
 
-    private static CharSequence generateChoiceNotPresentCondition(final int sinceVersion, final String indent)
+    private static CharSequence generateChoiceNotPresentCondition(final int sinceVersion)
     {
         if (0 == sinceVersion)
         {
@@ -747,10 +805,10 @@ public class CppGenerator implements CodeGenerator
         }
 
         return String.format(
-            indent + "        if (m_actingVersion < %1$d)\n" +
-            indent + "        {\n" +
-            indent + "            return false;\n" +
-            indent + "        }\n\n",
+            "        if (m_actingVersion < %1$d)\n" +
+            "        {\n" +
+            "            return false;\n" +
+            "        }\n\n",
             sinceVersion);
     }
 
@@ -797,7 +855,7 @@ public class CppGenerator implements CodeGenerator
                     "        return (%3$s(val) & (1u << %5$su)) != 0;\n" +
                     "    }\n",
                     choiceName,
-                    generateChoiceNotPresentCondition(token.version(), BASE_INDENT),
+                    generateChoiceNotPresentCondition(token.version()),
                     byteOrderStr,
                     typeName,
                     choiceBitPosition);
@@ -863,11 +921,14 @@ public class CppGenerator implements CodeGenerator
 
         for (final Token token : tokens)
         {
-            new Formatter(sb).format(
-                "            case %1$s: return %2$s;\n",
-                token.encoding().constValue().toString(),
-                token.name());
+            final CharSequence constVal = generateLiteral(
+                token.encoding().primitiveType(), token.encoding().constValue().toString());
+
+            sb.append("            case ").append(constVal).append(": return ").append(token.name()).append(";\n");
         }
+
+        final CharSequence constVal = generateLiteral(
+            encodingToken.encoding().primitiveType(), encodingToken.encoding().applicableNullValue().toString());
 
         new Formatter(sb).format(
             "            case %1$s: return NULL_VALUE;\n" +
@@ -875,7 +936,7 @@ public class CppGenerator implements CodeGenerator
 
             "        throw std::runtime_error(\"unknown value for enum %2$s [E103]\");\n" +
             "    }\n",
-            encodingToken.encoding().applicableNullValue().toString(),
+            constVal,
             enumName);
 
         return sb;
@@ -984,12 +1045,6 @@ public class CppGenerator implements CodeGenerator
             "#endif\n\n" +
 
             "#if __cplusplus >= 201103L\n" +
-            "#  include <cstdint>\n" +
-            "#  include <string>\n" +
-            "#  include <cstring>\n" +
-            "#endif\n\n" +
-
-            "#if __cplusplus >= 201103L\n" +
             "#  define SBE_CONSTEXPR constexpr\n" +
             "#  define SBE_NOEXCEPT noexcept\n" +
             "#else\n" +
@@ -998,6 +1053,7 @@ public class CppGenerator implements CodeGenerator
             "#endif\n\n" +
 
             "#if __cplusplus >= 201703L\n" +
+            "#  include <string_view>\n" +
             "#  define SBE_NODISCARD [[nodiscard]]\n" +
             "#else\n" +
             "#  define SBE_NODISCARD\n" +
@@ -1005,14 +1061,19 @@ public class CppGenerator implements CodeGenerator
 
             "#if !defined(__STDC_LIMIT_MACROS)\n" +
             "#  define __STDC_LIMIT_MACROS 1\n" +
-            "#endif\n" +
+            "#endif\n\n" +
+
             "#include <cstdint>\n" +
             "#include <cstring>\n" +
+            "#include <iomanip>\n" +
             "#include <limits>\n" +
-            "#include <stdexcept>\n\n" +
             "#include <ostream>\n" +
+            "#include <stdexcept>\n" +
             "#include <sstream>\n" +
-            "#include <iomanip>\n\n" +
+            "#include <string>\n" +
+            "#include <vector>\n" +
+            "#include <tuple>\n" +
+            "\n" +
 
             "#if defined(WIN32) || defined(_WIN32)\n" +
             "#  define SBE_BIG_ENDIAN_ENCODE_16(v) _byteswap_ushort(v)\n" +
@@ -1098,12 +1159,12 @@ public class CppGenerator implements CodeGenerator
             final String propertyName = formatPropertyName(fieldToken.name());
 
             generateFieldMetaAttributeMethod(sb, fieldToken, indent);
-            generateFieldCommonMethods(indent, sb, fieldToken, fieldToken, propertyName, true);
+            generateFieldCommonMethods(indent, sb, fieldToken, fieldToken, propertyName);
 
             switch (fieldToken.signal())
             {
                 case ENCODING:
-                    generatePrimitiveProperty(sb, containingClassName, propertyName, fieldToken, indent);
+                    generatePrimitiveProperty(sb, containingClassName, propertyName, fieldToken, fieldToken, indent);
                     break;
 
                 case BEGIN_ENUM:
@@ -1129,18 +1190,20 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb,
         final String containingClassName,
         final String propertyName,
-        final Token token,
+        final Token propertyToken,
+        final Token encodingToken,
         final String indent)
     {
-        generatePrimitiveFieldMetaData(sb, propertyName, token, indent);
+        generatePrimitiveFieldMetaData(sb, propertyName, encodingToken, indent);
 
-        if (token.isConstantEncoding())
+        if (encodingToken.isConstantEncoding())
         {
-            generateConstPropertyMethods(sb, propertyName, token, indent);
+            generateConstPropertyMethods(sb, propertyName, encodingToken, indent);
         }
         else
         {
-            generatePrimitivePropertyMethods(sb, containingClassName, propertyName, token, indent);
+            generatePrimitivePropertyMethods(
+                sb, containingClassName, propertyName, propertyToken, encodingToken, indent);
         }
     }
 
@@ -1148,17 +1211,18 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb,
         final String containingClassName,
         final String propertyName,
-        final Token token,
+        final Token propertyToken,
+        final Token encodingToken,
         final String indent)
     {
-        final int arrayLength = token.arrayLength();
+        final int arrayLength = encodingToken.arrayLength();
         if (arrayLength == 1)
         {
-            generateSingleValueProperty(sb, containingClassName, propertyName, token, indent);
+            generateSingleValueProperty(sb, containingClassName, propertyName, propertyToken, encodingToken, indent);
         }
         else if (arrayLength > 1)
         {
-            generateArrayProperty(sb, containingClassName, propertyName, token, indent);
+            generateArrayProperty(sb, containingClassName, propertyName, propertyToken, encodingToken, indent);
         }
     }
 
@@ -1290,12 +1354,13 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb,
         final String containingClassName,
         final String propertyName,
-        final Token token,
+        final Token propertyToken,
+        final Token encodingToken,
         final String indent)
     {
-        final PrimitiveType primitiveType = token.encoding().primitiveType();
+        final PrimitiveType primitiveType = encodingToken.encoding().primitiveType();
         final String cppTypeName = cppTypeName(primitiveType);
-        final int offset = token.offset();
+        final int offset = encodingToken.offset();
 
         new Formatter(sb).format("\n" +
             indent + "    SBE_NODISCARD %1$s %2$s() const SBE_NOEXCEPT\n" +
@@ -1305,11 +1370,11 @@ public class CppGenerator implements CodeGenerator
             indent + "    }\n",
             cppTypeName,
             propertyName,
-            generateFieldNotPresentCondition(token.version(), token.encoding(), indent),
-            generateLoadValue(primitiveType, Integer.toString(offset), token.encoding().byteOrder(), indent));
+            generateFieldNotPresentCondition(propertyToken.version(), encodingToken.encoding(), indent),
+            generateLoadValue(primitiveType, Integer.toString(offset), encodingToken.encoding().byteOrder(), indent));
 
         final CharSequence storeValue = generateStoreValue(
-            primitiveType, "", Integer.toString(offset), token.encoding().byteOrder(), indent);
+            primitiveType, "", Integer.toString(offset), encodingToken.encoding().byteOrder(), indent);
 
         new Formatter(sb).format("\n" +
             indent + "    %1$s &%2$s(const %3$s value) SBE_NOEXCEPT\n" +
@@ -1327,14 +1392,15 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb,
         final String containingClassName,
         final String propertyName,
-        final Token token,
+        final Token propertyToken,
+        final Token encodingToken,
         final String indent)
     {
-        final PrimitiveType primitiveType = token.encoding().primitiveType();
+        final PrimitiveType primitiveType = encodingToken.encoding().primitiveType();
         final String cppTypeName = cppTypeName(primitiveType);
-        final int offset = token.offset();
+        final int offset = encodingToken.offset();
 
-        final int arrayLength = token.arrayLength();
+        final int arrayLength = encodingToken.arrayLength();
         new Formatter(sb).format("\n" +
             indent + "    static SBE_CONSTEXPR std::uint64_t %1$sLength() SBE_NOEXCEPT\n" +
             indent + "    {\n" +
@@ -1350,7 +1416,7 @@ public class CppGenerator implements CodeGenerator
             indent + "        return m_buffer + m_offset + %3$d;\n" +
             indent + "    }\n",
             propertyName,
-            generateTypeFieldNotPresentCondition(token.version(), indent),
+            generateTypeFieldNotPresentCondition(propertyToken.version(), indent),
             offset);
 
         new Formatter(sb).format("\n" +
@@ -1360,13 +1426,13 @@ public class CppGenerator implements CodeGenerator
             indent + "        return m_buffer + m_offset + %3$d;\n" +
             indent + "    }\n",
             propertyName,
-            generateTypeFieldNotPresentCondition(token.version(), indent),
+            generateTypeFieldNotPresentCondition(propertyToken.version(), indent),
             offset);
 
         final CharSequence loadValue = generateLoadValue(
             primitiveType,
             String.format("%d + (index * %d)", offset, primitiveType.size()),
-            token.encoding().byteOrder(),
+            encodingToken.encoding().byteOrder(),
             indent);
 
         new Formatter(sb).format("\n" +
@@ -1382,14 +1448,14 @@ public class CppGenerator implements CodeGenerator
             cppTypeName,
             propertyName,
             arrayLength,
-            generateFieldNotPresentCondition(token.version(), token.encoding(), indent),
+            generateFieldNotPresentCondition(propertyToken.version(), encodingToken.encoding(), indent),
             loadValue);
 
         final CharSequence storeValue = generateStoreValue(
             primitiveType,
             "",
             String.format("%d + (index * %d)", offset, primitiveType.size()),
-            token.encoding().byteOrder(),
+            encodingToken.encoding().byteOrder(),
             indent);
 
         new Formatter(sb).format("\n" +
@@ -1424,7 +1490,7 @@ public class CppGenerator implements CodeGenerator
             indent + "    }\n",
             toUpperFirstChar(propertyName),
             arrayLength,
-            generateArrayFieldNotPresentCondition(token.version(), indent),
+            generateArrayFieldNotPresentCondition(propertyToken.version(), indent),
             offset,
             cppTypeName);
 
@@ -1466,7 +1532,7 @@ public class CppGenerator implements CodeGenerator
                     primitiveType,
                     Integer.toString(i),
                     Integer.toString(offset + (i * primitiveType.size())),
-                    token.encoding().byteOrder(),
+                    encodingToken.encoding().byteOrder(),
                     indent));
             }
 
@@ -1475,10 +1541,10 @@ public class CppGenerator implements CodeGenerator
             sb.append(indent).append("    }\n");
         }
 
-        if (token.encoding().primitiveType() == PrimitiveType.CHAR)
+        if (encodingToken.encoding().primitiveType() == PrimitiveType.CHAR)
         {
             new Formatter(sb).format("\n" +
-                indent + "    std::string get%1$sAsString() const\n" +
+                indent + "    SBE_NODISCARD std::string get%1$sAsString() const\n" +
                 indent + "    {\n" +
                 indent + "        const char *buffer = m_buffer + m_offset + %2$d;\n" +
                 indent + "        size_t length = 0;\n\n" +
@@ -1492,11 +1558,11 @@ public class CppGenerator implements CodeGenerator
                 offset,
                 arrayLength);
 
-            generateJsonEscapedStringGetter(sb, token, indent, propertyName);
+            generateJsonEscapedStringGetter(sb, encodingToken, indent, propertyName);
 
             new Formatter(sb).format("\n" +
                 indent + "    #if __cplusplus >= 201703L\n" +
-                indent + "    std::string_view get%1$sAsStringView() const SBE_NOEXCEPT\n" +
+                indent + "    SBE_NODISCARD std::string_view get%1$sAsStringView() const SBE_NOEXCEPT\n" +
                 indent + "    {\n" +
                 indent + "        const char *buffer = m_buffer + m_offset + %2$d;\n" +
                 indent + "        size_t length = 0;\n\n" +
@@ -1563,9 +1629,9 @@ public class CppGenerator implements CodeGenerator
             "%2$s" +
             indent + "        std::ostringstream oss;\n" +
             indent + "        std::string s = get%1$sAsString();\n\n" +
-            indent + "        for (auto c = s.cbegin(); c != s.cend(); c++)\n" +
+            indent + "        for (const auto c : s)\n" +
             indent + "        {\n" +
-            indent + "            switch (*c)\n" +
+            indent + "            switch (c)\n" +
             indent + "            {\n" +
             indent + "                case '\"': oss << \"\\\\\\\"\"; break;\n" +
             indent + "                case '\\\\': oss << \"\\\\\\\\\"; break;\n" +
@@ -1575,14 +1641,14 @@ public class CppGenerator implements CodeGenerator
             indent + "                case '\\r': oss << \"\\\\r\"; break;\n" +
             indent + "                case '\\t': oss << \"\\\\t\"; break;\n\n" +
             indent + "                default:\n" +
-            indent + "                    if ('\\x00' <= *c && *c <= '\\x1f')\n" +
+            indent + "                    if ('\\x00' <= c && c <= '\\x1f')\n" +
             indent + "                    {\n" +
             indent + "                        oss << \"\\\\u\"" + " << std::hex << std::setw(4)\n" +
-            indent + "                            << std::setfill('0') << (int)(*c);\n" +
+            indent + "                            << std::setfill('0') << (int)(c);\n" +
             indent + "                    }\n" +
             indent + "                    else\n" +
             indent + "                    {\n" +
-            indent + "                        oss << *c;\n" +
+            indent + "                        oss << c;\n" +
             indent + "                    }\n" +
             indent + "            }\n" +
             indent + "        }\n\n" +
@@ -1761,12 +1827,12 @@ public class CppGenerator implements CodeGenerator
             "        return m_offset;\n" +
             "    }\n\n" +
 
-            "    SBE_NODISCARD const char * buffer() const SBE_NOEXCEPT\n" +
+            "    SBE_NODISCARD const char *buffer() const SBE_NOEXCEPT\n" +
             "    {\n" +
             "        return m_buffer;\n" +
             "    }\n\n" +
 
-            "    SBE_NODISCARD char * buffer() SBE_NOEXCEPT\n" +
+            "    SBE_NODISCARD char *buffer() SBE_NOEXCEPT\n" +
             "    {\n" +
             "        return m_buffer;\n" +
             "    }\n\n" +
@@ -1840,6 +1906,7 @@ public class CppGenerator implements CodeGenerator
         final String schemaIdType = cppTypeName(ir.headerStructure().schemaIdType());
         final String schemaVersionType = cppTypeName(ir.headerStructure().schemaVersionType());
         final String semanticType = token.encoding().semanticType() == null ? "" : token.encoding().semanticType();
+        final String headerType = ir.headerStructure().tokens().get(0).name();
 
         return String.format(
             "private:\n" +
@@ -1855,6 +1922,11 @@ public class CppGenerator implements CodeGenerator
             "    }\n\n" +
 
             "public:\n" +
+            "    static const %1$s SBE_BLOCK_LENGTH = %2$s;\n" +
+            "    static const %3$s SBE_TEMPLATE_ID = %4$s;\n" +
+            "    static const %5$s SBE_SCHEMA_ID = %6$s;\n" +
+            "    static const %7$s SBE_SCHEMA_VERSION = %8$s;\n\n" +
+
             "    enum MetaAttribute\n" +
             "    {\n" +
             "        EPOCH, TIME_UNIT, SEMANTIC_TYPE, PRESENCE\n" +
@@ -1872,10 +1944,17 @@ public class CppGenerator implements CodeGenerator
             "        std::uint64_t uint_value;\n" +
             "    };\n\n" +
 
+            "    using messageHeader = %12$s;\n\n" +
+
             "%11$s" +
             "    SBE_NODISCARD static SBE_CONSTEXPR %1$s sbeBlockLength() SBE_NOEXCEPT\n" +
             "    {\n" +
             "        return %2$s;\n" +
+            "    }\n\n" +
+
+            "    SBE_NODISCARD static SBE_CONSTEXPR std::uint64_t sbeBlockAndHeaderLength() SBE_NOEXCEPT\n" +
+            "    {\n" +
+            "        return messageHeader::encodedLength() + sbeBlockLength();\n" +
             "    }\n\n" +
 
             "    SBE_NODISCARD static SBE_CONSTEXPR %3$s sbeTemplateId() SBE_NOEXCEPT\n" +
@@ -1893,7 +1972,7 @@ public class CppGenerator implements CodeGenerator
             "        return %8$s;\n" +
             "    }\n\n" +
 
-            "    SBE_NODISCARD static SBE_CONSTEXPR const char * sbeSemanticType() SBE_NOEXCEPT\n" +
+            "    SBE_NODISCARD static SBE_CONSTEXPR const char *sbeSemanticType() SBE_NOEXCEPT\n" +
             "    {\n" +
             "        return \"%9$s\";\n" +
             "    }\n\n" +
@@ -1911,7 +1990,7 @@ public class CppGenerator implements CodeGenerator
             "    %10$s &wrapAndApplyHeader(" +
             "char *buffer, const std::uint64_t offset, const std::uint64_t bufferLength)\n" +
             "    {\n" +
-            "        MessageHeader hdr(buffer, offset, bufferLength, sbeSchemaVersion());\n\n" +
+            "        messageHeader hdr(buffer, offset, bufferLength, sbeSchemaVersion());\n\n" +
 
             "        hdr\n" +
             "            .blockLength(sbeBlockLength())\n" +
@@ -1921,7 +2000,7 @@ public class CppGenerator implements CodeGenerator
 
             "        return *this = %10$s(\n" +
             "            buffer,\n" +
-            "            offset + MessageHeader::encodedLength(),\n" +
+            "            offset + messageHeader::encodedLength(),\n" +
             "            bufferLength,\n" +
             "            sbeBlockLength(),\n" +
             "            sbeSchemaVersion());\n" +
@@ -1942,6 +2021,7 @@ public class CppGenerator implements CodeGenerator
             "        return m_position;\n" +
             "    }\n\n" +
 
+            "    // NOLINTNEXTLINE(readability-convert-member-functions-to-static)\n" +
             "    std::uint64_t sbeCheckPosition(const std::uint64_t position)\n" +
             "    {\n" +
             "        if (SBE_BOUNDS_CHECK_EXPECT((position > m_bufferLength), false))\n" +
@@ -1961,12 +2041,19 @@ public class CppGenerator implements CodeGenerator
             "        return sbePosition() - m_offset;\n" +
             "    }\n\n" +
 
-            "    SBE_NODISCARD const char * buffer() const SBE_NOEXCEPT\n" +
+            "    SBE_NODISCARD std::uint64_t decodeLength() const\n" +
+            "    {\n" +
+            "        %10$s skipper(m_buffer, m_offset, m_bufferLength, sbeBlockLength(), m_actingVersion);\n" +
+            "        skipper.skip();\n" +
+            "        return skipper.encodedLength();\n" +
+            "    }\n\n" +
+
+            "    SBE_NODISCARD const char *buffer() const SBE_NOEXCEPT\n" +
             "    {\n" +
             "        return m_buffer;\n" +
             "    }\n\n" +
 
-            "    SBE_NODISCARD char * buffer() SBE_NOEXCEPT\n" +
+            "    SBE_NODISCARD char *buffer() SBE_NOEXCEPT\n" +
             "    {\n" +
             "        return m_buffer;\n" +
             "    }\n\n" +
@@ -1990,15 +2077,15 @@ public class CppGenerator implements CodeGenerator
             generateLiteral(ir.headerStructure().schemaVersionType(), Integer.toString(ir.version())),
             semanticType,
             className,
-            generateConstructorsAndOperators(className));
+            generateConstructorsAndOperators(className),
+            formatClassName(headerType));
     }
 
     private void generateFields(
         final StringBuilder sb,
         final String containingClassName,
         final List<Token> tokens,
-        final String indent,
-        final boolean inComposite)
+        final String indent)
     {
         for (int i = 0, size = tokens.size(); i < size; i++)
         {
@@ -2009,12 +2096,13 @@ public class CppGenerator implements CodeGenerator
                 final String propertyName = formatPropertyName(signalToken.name());
 
                 generateFieldMetaAttributeMethod(sb, signalToken, indent);
-                generateFieldCommonMethods(indent, sb, signalToken, encodingToken, propertyName, inComposite);
+                generateFieldCommonMethods(indent, sb, signalToken, encodingToken, propertyName);
 
                 switch (encodingToken.signal())
                 {
                     case ENCODING:
-                        generatePrimitiveProperty(sb, containingClassName, propertyName, encodingToken, indent);
+                        generatePrimitiveProperty(
+                            sb, containingClassName, propertyName, signalToken, encodingToken, indent);
                         break;
 
                     case BEGIN_ENUM:
@@ -2038,19 +2126,15 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb,
         final Token fieldToken,
         final Token encodingToken,
-        final String propertyName,
-        final boolean inComposite)
+        final String propertyName)
     {
-        if (!inComposite)
-        {
-            new Formatter(sb).format("\n" +
-                indent + "    static SBE_CONSTEXPR std::uint16_t %1$sId() SBE_NOEXCEPT\n" +
-                indent + "    {\n" +
-                indent + "        return %2$d;\n" +
-                indent + "    }\n",
-                propertyName,
-                fieldToken.id());
-        }
+        new Formatter(sb).format("\n" +
+            indent + "    static SBE_CONSTEXPR std::uint16_t %1$sId() SBE_NOEXCEPT\n" +
+            indent + "    {\n" +
+            indent + "        return %2$d;\n" +
+            indent + "    }\n",
+            propertyName,
+            fieldToken.id());
 
         new Formatter(sb).format("\n" +
             indent + "    SBE_NODISCARD static SBE_CONSTEXPR std::uint64_t %1$sSinceVersion() SBE_NOEXCEPT\n" +
@@ -2089,25 +2173,38 @@ public class CppGenerator implements CodeGenerator
         final String timeUnit = encoding.timeUnit() == null ? "" : encoding.timeUnit();
         final String semanticType = encoding.semanticType() == null ? "" : encoding.semanticType();
 
-        new Formatter(sb).format("\n" +
-            indent + "    SBE_NODISCARD static const char * %sMetaAttribute(const MetaAttribute metaAttribute)" +
-            " SBE_NOEXCEPT\n" +
-            indent + "    {\n" +
-            indent + "        switch (metaAttribute)\n" +
-            indent + "        {\n" +
-            indent + "            case MetaAttribute::EPOCH: return \"%s\";\n" +
-            indent + "            case MetaAttribute::TIME_UNIT: return \"%s\";\n" +
-            indent + "            case MetaAttribute::SEMANTIC_TYPE: return \"%s\";\n" +
-            indent + "            case MetaAttribute::PRESENCE: return \"%s\";\n" +
-            indent + "        }\n\n" +
+        sb.append("\n")
+            .append(indent).append("    SBE_NODISCARD static const char *")
+            .append(token.name()).append("MetaAttribute(const MetaAttribute metaAttribute) SBE_NOEXCEPT\n")
+            .append(indent).append("    {\n")
+            .append(indent).append("        switch (metaAttribute)\n")
+            .append(indent).append("        {\n");
 
-            indent + "        return \"\";\n" +
-            indent + "    }\n",
-            token.name(),
-            epoch,
-            timeUnit,
-            semanticType,
-            encoding.presence().toString().toLowerCase());
+        if (!Strings.isEmpty(epoch))
+        {
+            sb.append(indent)
+                .append("            case MetaAttribute::EPOCH: return \"").append(epoch).append("\";\n");
+        }
+
+        if (!Strings.isEmpty(timeUnit))
+        {
+            sb.append(indent)
+                .append("            case MetaAttribute::TIME_UNIT: return \"").append(timeUnit).append("\";\n");
+        }
+
+        if (!Strings.isEmpty(semanticType))
+        {
+            sb.append(indent)
+                .append("            case MetaAttribute::SEMANTIC_TYPE: return \"").append(semanticType)
+                .append("\";\n");
+        }
+
+        sb
+            .append(indent).append("            case MetaAttribute::PRESENCE: return \"")
+            .append(encoding.presence().toString().toLowerCase()).append("\";\n")
+            .append(indent).append("            default: return \"\";\n")
+            .append(indent).append("        }\n")
+            .append(indent).append("    }\n");
     }
 
     private static CharSequence generateEnumFieldNotPresentCondition(
@@ -2163,20 +2260,20 @@ public class CppGenerator implements CodeGenerator
                 constValue.substring(constValue.indexOf(".") + 1));
 
             new Formatter(sb).format("\n" +
-                indent + "    SBE_NODISCARD %1$s::Value %2$s() const SBE_NOEXCEPT\n" +
+                indent + "    SBE_NODISCARD %1$s::Value %2$s() const\n" +
                 indent + "    {\n" +
                 "%3$s" +
                 indent + "        return %1$s::Value::%4$s;\n" +
                 indent + "    }\n",
                 enumName,
                 propertyName,
-                generateEnumFieldNotPresentCondition(token.version(), enumName, indent),
+                generateEnumFieldNotPresentCondition(fieldToken.version(), enumName, indent),
                 constValue.substring(constValue.indexOf(".") + 1));
         }
         else
         {
             new Formatter(sb).format("\n" +
-                indent + "    SBE_NODISCARD %1$s::Value %2$s() const SBE_NOEXCEPT\n" +
+                indent + "    SBE_NODISCARD %1$s::Value %2$s() const\n" +
                 indent + "    {\n" +
                 "%3$s" +
                 indent + "        %5$s val;\n" +
@@ -2185,7 +2282,7 @@ public class CppGenerator implements CodeGenerator
                 indent + "    }\n",
                 enumName,
                 propertyName,
-                generateEnumFieldNotPresentCondition(token.version(), enumName, indent),
+                generateEnumFieldNotPresentCondition(fieldToken.version(), enumName, indent),
                 formatByteOrderEncoding(token.encoding().byteOrder(), token.encoding().primitiveType()),
                 typeName,
                 offset);
@@ -2243,7 +2340,6 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb, final String propertyName, final Token token, final String indent)
     {
         final String compositeName = formatClassName(token.applicableTypeName());
-        final int offset = token.offset();
 
         new Formatter(sb).format("\n" +
             "private:\n" +
@@ -2261,7 +2357,7 @@ public class CppGenerator implements CodeGenerator
             indent + "    }\n",
             compositeName,
             propertyName,
-            offset);
+            token.offset());
     }
 
     private CharSequence generateNullValueLiteral(final PrimitiveType primitiveType, final Encoding encoding)
@@ -2299,11 +2395,10 @@ public class CppGenerator implements CodeGenerator
         return generateLiteral(primitiveType, encoding.applicableNullValue().toString());
     }
 
-    private CharSequence generateLiteral(final PrimitiveType type, final String value)
+    private static CharSequence generateLiteral(final PrimitiveType type, final String value)
     {
         String literal = "";
 
-        final String castType = cppTypeName(type);
         switch (type)
         {
             case CHAR:
@@ -2311,12 +2406,23 @@ public class CppGenerator implements CodeGenerator
             case UINT16:
             case INT8:
             case INT16:
-                literal = "(" + castType + ")" + value;
+                literal = "static_cast<" + cppTypeName(type) + ">(" + value + ")";
                 break;
 
             case UINT32:
+                literal = "UINT32_C(0x" + Integer.toHexString((int)Long.parseLong(value)) + ")";
+                break;
+
             case INT32:
-                literal = value;
+                final long intValue = Long.parseLong(value);
+                if (intValue == Integer.MIN_VALUE)
+                {
+                    literal = "INT32_MIN";
+                }
+                else
+                {
+                    literal = "INT32_C(" + value + ")";
+                }
                 break;
 
             case FLOAT:
@@ -2324,15 +2430,19 @@ public class CppGenerator implements CodeGenerator
                 break;
 
             case INT64:
-                literal = value + "L";
-                if (value.equals("-9223372036854775808"))
+                final long longValue = Long.parseLong(value);
+                if (longValue == Long.MIN_VALUE)
                 {
                     literal = "INT64_MIN";
+                }
+                else
+                {
+                    literal = "INT64_C(" + value + ")";
                 }
                 break;
 
             case UINT64:
-                literal = "0x" + Long.toHexString(Long.parseLong(value)) + "L";
+                literal = "UINT64_C(0x" + Long.toHexString(Long.parseLong(value)) + ")";
                 break;
 
             case DOUBLE:
@@ -2348,27 +2458,26 @@ public class CppGenerator implements CodeGenerator
         final String name,
         final List<Token> fields,
         final List<Token> groups,
-        final List<Token> varData,
-        final String indent)
+        final List<Token> varData)
     {
         new Formatter(sb).format("\n" +
-            indent + "template<typename CharT, typename Traits>\n" +
-            indent + "friend std::basic_ostream<CharT, Traits>& operator<<(\n" +
-            indent + "    std::basic_ostream<CharT, Traits>& builder, %1$s _writer)\n" +
-            indent + "{\n" +
-            indent + "    %1$s writer(_writer.m_buffer, _writer.m_offset,\n" +
-            indent + "        _writer.m_bufferLength, _writer.sbeBlockLength(), _writer.m_actingVersion);\n" +
-            indent + "    builder << '{';\n" +
-            indent + "    builder << R\"(\"Name\": \"%1$s\", )\";\n" +
-            indent + "    builder << R\"(\"sbeTemplateId\": )\";\n" +
-            indent + "    builder << writer.sbeTemplateId();\n" +
-            indent + "    builder << \", \";\n\n" +
+            "template<typename CharT, typename Traits>\n" +
+            "friend std::basic_ostream<CharT, Traits>& operator << (\n" +
+            "    std::basic_ostream<CharT, Traits>& builder, %1$s _writer)\n" +
+            "{\n" +
+            "    %1$s writer(_writer.m_buffer, _writer.m_offset,\n" +
+            "        _writer.m_bufferLength, _writer.sbeBlockLength(), _writer.m_actingVersion);\n" +
+            "    builder << '{';\n" +
+            "    builder << R\"(\"Name\": \"%1$s\", )\";\n" +
+            "    builder << R\"(\"sbeTemplateId\": )\";\n" +
+            "    builder << writer.sbeTemplateId();\n" +
+            "    builder << \", \";\n\n" +
             "%2$s" +
-            indent + "    builder << '}';\n\n" +
-            indent + "    return builder;\n" +
-            indent + "}\n",
+            "    builder << '}';\n\n" +
+            "    return builder;\n" +
+            "}\n",
             formatClassName(name),
-            appendDisplay(fields, groups, varData, indent + INDENT));
+            appendDisplay(fields, groups, varData, INDENT));
     }
 
     private CharSequence generateGroupDisplay(
@@ -2380,7 +2489,7 @@ public class CppGenerator implements CodeGenerator
     {
         return String.format("\n" +
             indent + "template<typename CharT, typename Traits>\n" +
-            indent + "friend std::basic_ostream<CharT, Traits>& operator<<(\n" +
+            indent + "friend std::basic_ostream<CharT, Traits>& operator << (\n" +
             indent + "    std::basic_ostream<CharT, Traits>& builder, %1$s writer)\n" +
             indent + "{\n" +
             indent + "    builder << '{';\n" +
@@ -2392,20 +2501,20 @@ public class CppGenerator implements CodeGenerator
             appendDisplay(fields, groups, varData, indent + INDENT));
     }
 
-    private CharSequence generateCompositeDisplay(final String name, final List<Token> tokens, final String indent)
+    private CharSequence generateCompositeDisplay(final String name, final List<Token> tokens)
     {
         return String.format("\n" +
-            indent + "template<typename CharT, typename Traits>\n" +
-            indent + "friend std::basic_ostream<CharT, Traits>& operator<<(\n" +
-            indent + "    std::basic_ostream<CharT, Traits>& builder, %1$s writer)\n" +
-            indent + "{\n" +
-            indent + "    builder << '{';\n" +
+            "template<typename CharT, typename Traits>\n" +
+            "friend std::basic_ostream<CharT, Traits>& operator << (\n" +
+            "    std::basic_ostream<CharT, Traits>& builder, %1$s writer)\n" +
+            "{\n" +
+            "    builder << '{';\n" +
             "%2$s" +
-            indent + "    builder << '}';\n\n" +
-            indent + "    return builder;\n" +
-            indent + "}\n\n",
+            "    builder << '}';\n\n" +
+            "    return builder;\n" +
+            "}\n\n",
             formatClassName(name),
-            appendDisplay(tokens, new ArrayList<>(), new ArrayList<>(), indent + INDENT));
+            appendDisplay(tokens, new ArrayList<>(), new ArrayList<>(), INDENT));
     }
 
     private CharSequence appendDisplay(
@@ -2417,23 +2526,10 @@ public class CppGenerator implements CodeGenerator
         for (int i = 0, size = fields.size(); i < size;)
         {
             final Token fieldToken = fields.get(i);
+            final Token encodingToken = fields.get(fieldToken.signal() == Signal.BEGIN_FIELD ? i + 1 : i);
 
-            if (fieldToken.signal() == Signal.BEGIN_FIELD)
-            {
-                final Token encodingToken = fields.get(i + 1);
-
-                writeTokenDisplay(sb, fieldToken.name(), encodingToken, atLeastOne, indent);
-
-                i += fieldToken.componentTokenCount();
-            }
-            else
-            {
-                final Token encodingToken = fields.get(i);
-
-                writeTokenDisplay(sb, fieldToken.name(), encodingToken, atLeastOne, indent);
-
-                i += fieldToken.componentTokenCount();
-            }
+            writeTokenDisplay(sb, fieldToken.name(), encodingToken, atLeastOne, indent);
+            i += fieldToken.componentTokenCount();
         }
 
         for (int i = 0, size = groups.size(); i < size; i++)
@@ -2446,8 +2542,7 @@ public class CppGenerator implements CodeGenerator
 
             if (atLeastOne[0])
             {
-                sb.append(
-                    indent + "builder << \", \";\n");
+                sb.append(indent).append("builder << \", \";\n");
             }
             atLeastOne[0] = true;
 
@@ -2483,34 +2578,27 @@ public class CppGenerator implements CodeGenerator
 
             if (atLeastOne[0])
             {
-                sb.append(
-                    indent + "builder << \", \";\n");
+                sb.append(indent).append("builder << \", \";\n");
             }
             atLeastOne[0] = true;
 
             final String characterEncoding = varData.get(i + 3).encoding().characterEncoding();
-            sb.append(indent + "builder << R\"(\"" + varDataToken.name() + "\": )\";\n");
+            sb.append(indent).append("builder << R\"(\"").append(varDataToken.name()).append("\": )\";\n");
 
             if (null == characterEncoding)
             {
-                final String propertyName = toLowerFirstChar(varDataToken.name());
-                final String getLengthFunction = "writer." + propertyName + "Length()";
+                final String skipFunction = "writer.skip" + toUpperFirstChar(varDataToken.name()) + "()";
 
-                sb.append(
-                    indent + "builder << '\"' <<\n" +
-                    indent + INDENT + getLengthFunction + " << \" bytes of raw data\\\"\";\n");
-
-                sb.append(
-                    indent + "writer." + propertyName + "();\n\n");
+                sb.append(indent).append("builder << '\"' <<\n").append(indent).append(INDENT).append(skipFunction)
+                    .append(" << \" bytes of raw data\\\"\";\n");
             }
             else
             {
                 final String getAsStringFunction =
                     "writer.get" + toUpperFirstChar(varDataToken.name()) + "AsJsonEscapedString().c_str()";
 
-                sb.append(
-                    indent + "builder << '\"' <<\n" +
-                    indent + INDENT + getAsStringFunction + " << '\"';\n\n");
+                sb.append(indent).append("builder << '\"' <<\n").append(indent).append(INDENT)
+                    .append(getAsStringFunction).append(" << '\"';\n\n");
             }
 
             i += varDataToken.componentTokenCount();
@@ -2533,15 +2621,14 @@ public class CppGenerator implements CodeGenerator
 
         if (atLeastOne[0])
         {
-            sb.append(
-                indent + "builder << \", \";\n");
+            sb.append(indent).append("builder << \", \";\n");
         }
         else
         {
             atLeastOne[0] = true;
         }
 
-        sb.append(indent + "builder << R\"(\"" + fieldTokenName + "\": )\";\n");
+        sb.append(indent).append("builder << R\"(\"").append(fieldTokenName).append("\": )\";\n");
         final String fieldName = "writer." + formatPropertyName(fieldTokenName);
 
         switch (typeToken.signal())
@@ -2554,9 +2641,8 @@ public class CppGenerator implements CodeGenerator
                         final String getAsStringFunction =
                             "writer.get" + toUpperFirstChar(fieldTokenName) + "AsJsonEscapedString().c_str()";
 
-                        sb.append(
-                            indent + "builder << '\"' <<\n" +
-                            indent + INDENT + getAsStringFunction + " << '\"';\n");
+                        sb.append(indent).append("builder << '\"' <<\n").append(indent).append(INDENT)
+                            .append(getAsStringFunction).append(" << '\"';\n");
                     }
                     else
                     {
@@ -2592,21 +2678,18 @@ public class CppGenerator implements CodeGenerator
                     }
                     else
                     {
-                        sb.append(indent + "builder << +" + fieldName + "();\n");
+                        sb.append(indent).append("builder << +").append(fieldName).append("();\n");
                     }
                 }
                 break;
 
             case BEGIN_ENUM:
-                sb.append(indent + "builder << '\"' << " + fieldName + "() << '\"';\n");
+                sb.append(indent).append("builder << '\"' << ").append(fieldName).append("() << '\"';\n");
                 break;
 
             case BEGIN_SET:
-                sb.append(indent + "builder << " + fieldName + "();\n");
-                break;
-
             case BEGIN_COMPOSITE:
-                sb.append(indent + "builder << " + fieldName + "();\n");
+                sb.append(indent).append("builder << ").append(fieldName).append("();\n");
                 break;
         }
 
@@ -2623,7 +2706,7 @@ public class CppGenerator implements CodeGenerator
 
         new Formatter(sb).format("\n" +
             indent + "template<typename CharT, typename Traits>\n" +
-            indent + "friend std::basic_ostream<CharT, Traits>& operator<<(" +
+            indent + "friend std::basic_ostream<CharT, Traits>& operator << (\n" +
             indent + "    std::basic_ostream<CharT, Traits>& builder, %1$s writer)\n" +
             indent + "{\n" +
             indent + "    builder << '[';\n",
@@ -2639,9 +2722,8 @@ public class CppGenerator implements CodeGenerator
             final Token token = choiceTokens.get(i);
             final String choiceName = "writer." + formatPropertyName(token.name());
 
-            sb.append(
-                indent + "    if (" + choiceName + "())\n" +
-                indent + "    {\n");
+            sb.append(indent + "    if (").append(choiceName).append("())\n")
+                .append(indent).append("    {\n");
 
             if (i > 0)
             {
@@ -2651,16 +2733,14 @@ public class CppGenerator implements CodeGenerator
                     indent + "            builder << \",\";\n" +
                     indent + "        }\n");
             }
-            sb.append(
-                indent + "        builder << R\"(\"" + formatPropertyName(token.name()) + "\")\";\n");
+            sb.append(indent + "        builder << R\"(\"").append(formatPropertyName(token.name())).append("\")\";\n");
 
             if (i < (size - 1))
             {
                 sb.append(indent + "        atLeastOne = true;\n");
             }
 
-            sb.append(
-                indent + "    }\n");
+            sb.append(indent + "    }\n");
         }
 
         sb.append(
@@ -2677,7 +2757,7 @@ public class CppGenerator implements CodeGenerator
         final StringBuilder sb = new StringBuilder();
 
         new Formatter(sb).format("\n" +
-            "    static const char* c_str(const %1$s::Value value)\n" +
+            "    static const char *c_str(const %1$s::Value value)\n" +
             "    {\n" +
             "        switch (value)\n" +
             "        {\n",
@@ -2697,12 +2777,286 @@ public class CppGenerator implements CodeGenerator
             "    }\n\n" +
 
             "    template<typename CharT, typename Traits>\n" +
-            "    friend std::basic_ostream<CharT, Traits>& operator<<(\n" +
+            "    friend std::basic_ostream<CharT, Traits>& operator << (\n" +
             "        std::basic_ostream<CharT, Traits>& os, %1$s::Value m)\n" +
             "    {\n" +
             "        return os << %1$s::c_str(m);\n" +
             "    }\n",
             enumName);
+
+        return sb;
+    }
+
+    private Object[] generateMessageLengthArgs(
+        final List<Token> groups,
+        final List<Token> varData,
+        final String indent,
+        final boolean withName)
+    {
+        final StringBuilder sb = new StringBuilder();
+        int count = 0;
+
+        for (int i = 0, size = groups.size(); i < size; i++)
+        {
+            final Token groupToken = groups.get(i);
+            if (groupToken.signal() != Signal.BEGIN_GROUP)
+            {
+                throw new IllegalStateException("tokens must begin with BEGIN_GROUP: token=" + groupToken);
+            }
+
+            final int endSignal = findEndSignal(groups, i, Signal.END_GROUP, groupToken.name());
+            final String groupName = formatPropertyName(groupToken.name());
+
+            if (count > 0)
+            {
+                sb.append(",\n").append(indent);
+            }
+
+            final List<Token> thisGroup = groups.subList(i, endSignal + 1);
+
+            if (isMessageConstLength(thisGroup))
+            {
+                sb.append("std::size_t");
+                if (withName)
+                {
+                    sb.append(" ").append(groupName).append("Length = 0");
+                }
+            }
+            else
+            {
+                sb.append("const std::vector<std::tuple<");
+                sb.append(generateMessageLengthArgs(thisGroup, indent + INDENT, false)[0]);
+                sb.append(">> &");
+
+                if (withName)
+                {
+                    sb.append(groupName).append("ItemLengths = {}");
+                }
+            }
+
+            count += 1;
+
+            i = endSignal;
+        }
+
+        for (int i = 0, size = varData.size(); i < size;)
+        {
+            final Token varDataToken = varData.get(i);
+            if (varDataToken.signal() != Signal.BEGIN_VAR_DATA)
+            {
+                throw new IllegalStateException("tokens must begin with BEGIN_VAR_DATA: token=" + varDataToken);
+            }
+
+            if (count > 0)
+            {
+                sb.append(",\n").append(indent);
+            }
+
+            sb.append("std::size_t");
+            if (withName)
+            {
+                sb.append(" ").append(formatPropertyName(varDataToken.name())).append("Length = 0");
+            }
+
+            count += 1;
+
+            i += varDataToken.componentTokenCount();
+        }
+
+        CharSequence result = sb;
+        if (count > 1)
+        {
+            result = "\n" + indent + result;
+        }
+
+        return new Object[]{ result, count };
+    }
+
+    private Object[] generateMessageLengthArgs(final List<Token> tokens, final String indent, final boolean withName)
+    {
+        int i = 0;
+
+        final Token groupToken = tokens.get(i);
+        if (groupToken.signal() != Signal.BEGIN_GROUP)
+        {
+            throw new IllegalStateException("tokens must begin with BEGIN_GROUP: token=" + groupToken);
+        }
+
+        ++i;
+        final int groupHeaderTokenCount = tokens.get(i).componentTokenCount();
+        i += groupHeaderTokenCount;
+
+        final List<Token> fields = new ArrayList<>();
+        i = collectFields(tokens, i, fields);
+
+        final List<Token> groups = new ArrayList<>();
+        i = collectGroups(tokens, i, groups);
+
+        final List<Token> varData = new ArrayList<>();
+        collectVarData(tokens, i, varData);
+
+        return generateMessageLengthArgs(groups, varData, indent, withName);
+    }
+
+    private boolean isMessageConstLength(final List<Token> tokens)
+    {
+        final Integer count = (Integer)generateMessageLengthArgs(tokens, BASE_INDENT, false)[1];
+
+        return count == 0;
+    }
+
+    private CharSequence generateMessageLengthCallPre17Helper(final List<Token> tokens)
+    {
+        final StringBuilder sb = new StringBuilder();
+        final Integer count = (Integer)generateMessageLengthArgs(tokens, BASE_INDENT, false)[1];
+
+        for (int i = 0; i < count; i++)
+        {
+            if (i > 0)
+            {
+                sb.append(", ");
+            }
+
+            sb.append("std::get<").append(i).append(">(e)");
+        }
+
+        return sb;
+    }
+
+    private CharSequence generateMessageLength(final List<Token> groups, final List<Token> varData, final String indent)
+    {
+        final StringBuilder sbEncode = new StringBuilder();
+        final StringBuilder sbSkip = new StringBuilder();
+
+        for (int i = 0, size = groups.size(); i < size; i++)
+        {
+            final Token groupToken = groups.get(i);
+
+            if (groupToken.signal() != Signal.BEGIN_GROUP)
+            {
+                throw new IllegalStateException("tokens must begin with BEGIN_GROUP: token=" + groupToken);
+            }
+
+            final int endSignal = findEndSignal(groups, i, Signal.END_GROUP, groupToken.name());
+            final List<Token> thisGroup = groups.subList(i, endSignal + 1);
+
+            final Token numInGroupToken = Generators.findFirst("numInGroup", groups, i);
+            final long minCount = numInGroupToken.encoding().applicableMinValue().longValue();
+            final long maxCount = numInGroupToken.encoding().applicableMaxValue().longValue();
+
+            final String countName = formatPropertyName(groupToken.name()) +
+                (isMessageConstLength(thisGroup) ? "Length" : "ItemLengths.size()");
+
+            final String minCheck = minCount > 0 ? countName + " < " + minCount + "LL || " : "";
+            final String maxCheck = countName + " > " + maxCount + "LL";
+
+            new Formatter(sbEncode).format("\n" +
+                indent + "    length += %1$s::sbeHeaderSize();\n",
+                formatClassName(groupToken.name()));
+
+            if (isMessageConstLength(thisGroup))
+            {
+                new Formatter(sbEncode).format(
+                    indent + "    if (%3$s%4$s)\n" +
+                    indent + "    {\n" +
+                    indent + "        throw std::runtime_error(\"%5$s outside of allowed range [E110]\");\n" +
+                    indent + "    }\n" +
+                    indent + "    length += %1$sLength *%2$s::sbeBlockLength();\n",
+                    formatPropertyName(groupToken.name()),
+                    formatClassName(groupToken.name()),
+                    minCheck,
+                    maxCheck,
+                    countName);
+            }
+            else
+            {
+                new Formatter(sbEncode).format(
+                    indent + "    if (%3$s%4$s)\n" +
+                    indent + "    {\n" +
+                    indent + "        throw std::runtime_error(\"%5$s outside of allowed range [E110]\");\n" +
+                    indent + "    }\n\n" +
+                    indent + "    for (const auto &e: %1$sItemLengths)\n" +
+                    indent + "    {\n" +
+                    indent + "        #if __cpluplus >= 201703L\n" +
+                    indent + "        length += std::apply(%2$s::computeLength, e);\n" +
+                    indent + "        #else\n" +
+                    indent + "        length += %2$s::computeLength(%6$s);\n" +
+                    indent + "        #endif\n" +
+                    indent + "    }\n",
+                    formatPropertyName(groupToken.name()),
+                    formatClassName(groupToken.name()),
+                    minCheck,
+                    maxCheck,
+                    countName,
+                    generateMessageLengthCallPre17Helper(thisGroup));
+            }
+
+            new Formatter(sbSkip).format(
+                indent + "    %2$s().forEach([](%1$s e)\n" +
+                indent + "    {\n" +
+                indent + "        e.skip();\n" +
+                indent + "    });\n",
+                formatClassName(groupToken.name()),
+                formatPropertyName(groupToken.name()));
+
+            i = endSignal;
+        }
+
+        for (int i = 0, size = varData.size(); i < size;)
+        {
+            final Token varDataToken = varData.get(i);
+
+            if (varDataToken.signal() != Signal.BEGIN_VAR_DATA)
+            {
+                throw new IllegalStateException("tokens must begin with BEGIN_VAR_DATA: token=" + varDataToken);
+            }
+
+            final Token lengthToken = Generators.findFirst("length", varData, i);
+
+            new Formatter(sbEncode).format("\n" +
+                indent + "    length += %1$sHeaderLength();\n" +
+                indent + "    if (%1$sLength > %2$dLL)\n" +
+                indent + "    {\n" +
+                indent + "        throw std::runtime_error(\"%1$sLength too long for length type [E109]\");\n" +
+                indent + "    }\n" +
+                indent + "    length += %1$sLength;\n",
+                formatPropertyName(varDataToken.name()),
+                lengthToken.encoding().applicableMaxValue().longValue());
+
+            new Formatter(sbSkip).format(
+                indent + "    skip%1$s();\n",
+                toUpperFirstChar(varDataToken.name()));
+
+            i += varDataToken.componentTokenCount();
+        }
+
+        final StringBuilder sb = new StringBuilder();
+
+        new Formatter(sb).format("\n" +
+            indent + "void skip()\n" +
+            indent + "{\n" +
+            sbSkip +
+            indent + "}\n\n" +
+
+            indent + "SBE_NODISCARD static SBE_CONSTEXPR bool isConstLength() SBE_NOEXCEPT\n" +
+            indent + "{\n" +
+            indent + "    return " + (groups.isEmpty() && varData.isEmpty()) + ";\n" +
+            indent + "}\n\n" +
+
+            indent + "SBE_NODISCARD static std::size_t computeLength(%1$s)\n" +
+            indent + "{\n" +
+            "#if defined(__GNUG__) && !defined(__clang__)\n" +
+            "#pragma GCC diagnostic push\n" +
+            "#pragma GCC diagnostic ignored \"-Wtype-limits\"\n" +
+            "#endif\n" +
+            indent + "    std::size_t length = sbeBlockLength();\n" +
+            sbEncode + "\n" +
+            indent + "    return length;\n" +
+            "#if defined(__GNUG__) && !defined(__clang__)\n" +
+            "#pragma GCC diagnostic pop\n" +
+            "#endif\n" +
+            indent + "}\n",
+            generateMessageLengthArgs(groups, varData, indent + INDENT, true)[0]);
 
         return sb;
     }

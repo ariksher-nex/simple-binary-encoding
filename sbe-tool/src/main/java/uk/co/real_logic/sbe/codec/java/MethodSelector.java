@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Selects sorted methods of a class that are annotated with {@link GroupOrder}.
+ */
 public class MethodSelector
 {
     private final Set<String> ignoredMethods;

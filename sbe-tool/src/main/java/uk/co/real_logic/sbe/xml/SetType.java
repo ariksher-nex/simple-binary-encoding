@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2019 Real Logic Ltd.
+ * Copyright 2013-2020 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,11 +78,12 @@ public class SetType extends Type
 
             default:
                 // might not have ran into this type yet, so look for it
-                final Node encodingTypeNode = (Node)xPath.compile(
-                    String.format("%s[@name=\'%s\']", XmlSchemaParser.TYPE_XPATH_EXPR, encodingTypeStr))
+                final String expression = TYPE_XPATH_EXPR + "[@name='" + encodingTypeStr + "']";
+                final Node encodingTypeNode = (Node)xPath
+                    .compile(expression)
                     .evaluate(node.getOwnerDocument(), XPathConstants.NODE);
 
-                if (encodingTypeNode == null)
+                if (null == encodingTypeNode)
                 {
                     encodingType = null;
                 }
